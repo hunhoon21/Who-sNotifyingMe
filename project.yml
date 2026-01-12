@@ -1,0 +1,71 @@
+name: WhosNotifyingMe
+options:
+  bundleIdPrefix: com.henris
+  deploymentTarget:
+    iOS: "17.0"
+  xcodeVersion: "15.0"
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    TARGETED_DEVICE_FAMILY: "1"
+    INFOPLIST_KEY_UIApplicationSceneManifest_Generation: true
+    INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: true
+    INFOPLIST_KEY_UILaunchScreen_Generation: true
+    INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: "UIInterfaceOrientationPortrait"
+
+targets:
+  WhosNotifyingMe:
+    type: application
+    platform: iOS
+    sources:
+      - path: WhosNotifyingMe
+        excludes:
+          - "**/.DS_Store"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.henris.whosnotifyingme
+        INFOPLIST_KEY_CFBundleDisplayName: "Who's Notifying Me"
+        MARKETING_VERSION: "1.0.0"
+        CURRENT_PROJECT_VERSION: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ""
+    entitlements:
+      path: WhosNotifyingMe/App/WhosNotifyingMe.entitlements
+      properties:
+        com.apple.developer.family-controls: true
+        com.apple.security.application-groups:
+          - group.com.henris.whosnotifyingme
+
+  WhosNotifyingMeTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: WhosNotifyingMeTests
+    dependencies:
+      - target: WhosNotifyingMe
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.henris.whosnotifyingme.tests
+
+schemes:
+  WhosNotifyingMe:
+    build:
+      targets:
+        WhosNotifyingMe: all
+        WhosNotifyingMeTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - WhosNotifyingMeTests
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
