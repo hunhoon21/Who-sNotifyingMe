@@ -10,6 +10,7 @@ struct AppNotificationStats: Identifiable {
     let category: NotificationCategory
     let peakHour: Int?
     let averageDaily: Double
+    let iconSystemName: String
 
     init(
         appName: String,
@@ -19,7 +20,8 @@ struct AppNotificationStats: Identifiable {
         weeklyCount: Int = 0,
         category: NotificationCategory = .other,
         peakHour: Int? = nil,
-        averageDaily: Double = 0
+        averageDaily: Double = 0,
+        iconSystemName: String = "app.fill"
     ) {
         self.id = bundleId
         self.appName = appName
@@ -30,6 +32,15 @@ struct AppNotificationStats: Identifiable {
         self.category = category
         self.peakHour = peakHour
         self.averageDaily = averageDaily
+        self.iconSystemName = iconSystemName
+    }
+
+    var peakHourFormatted: String? {
+        guard let hour = peakHour else { return nil }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h a"
+        let date = Calendar.current.date(bySettingHour: hour, minute: 0, second: 0, of: Date())!
+        return formatter.string(from: date)
     }
 }
 

@@ -9,6 +9,7 @@ struct NotificationRecord: Identifiable, Codable {
     let category: NotificationCategory
     let timestamp: Date
     let isRead: Bool
+    let inputSource: InputSource
 
     init(
         id: UUID = UUID(),
@@ -18,7 +19,8 @@ struct NotificationRecord: Identifiable, Codable {
         body: String? = nil,
         category: NotificationCategory = .other,
         timestamp: Date = Date(),
-        isRead: Bool = false
+        isRead: Bool = false,
+        inputSource: InputSource = .manual
     ) {
         self.id = id
         self.appName = appName
@@ -28,10 +30,24 @@ struct NotificationRecord: Identifiable, Codable {
         self.category = category
         self.timestamp = timestamp
         self.isRead = isRead
+        self.inputSource = inputSource
+    }
+
+    // Convenience initializer from AppInfo
+    init(from appInfo: AppInfo, timestamp: Date = Date()) {
+        self.id = UUID()
+        self.appName = appInfo.name
+        self.appBundleId = appInfo.bundleId
+        self.title = nil
+        self.body = nil
+        self.category = appInfo.category
+        self.timestamp = timestamp
+        self.isRead = false
+        self.inputSource = .manual
     }
 }
 
-enum NotificationCategory: String, Codable, CaseIterable {
+enum NotificationCategory: String, Codable, CaseIterable, Identifiable {
     case social = "Social"
     case messaging = "Messaging"
     case news = "News"
@@ -41,6 +57,8 @@ enum NotificationCategory: String, Codable, CaseIterable {
     case finance = "Finance"
     case health = "Health"
     case other = "Other"
+
+    var id: String { rawValue }
 
     var icon: String {
         switch self {
@@ -54,5 +72,9 @@ enum NotificationCategory: String, Codable, CaseIterable {
         case .health: return "heart"
         case .other: return "bell"
         }
+    }
+
+    var displayName: String {
+        rawValue
     }
 }

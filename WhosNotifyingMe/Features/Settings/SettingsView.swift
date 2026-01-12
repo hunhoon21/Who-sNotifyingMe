@@ -2,13 +2,49 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject var notificationManager: NotificationManager
-    @AppStorage("enableNotifications") private var enableNotifications = true
-    @AppStorage("showBadge") private var showBadge = true
+    @AppStorage("enableDailySummary") private var enableDailySummary = true
     @AppStorage("dailyReportTime") private var dailyReportTime = Date()
+    @State private var showClearDataAlert = false
+    @State private var showResetAlert = false
 
     var body: some View {
         NavigationStack {
             List {
+                // Data Mode Section
+                Section {
+                    HStack {
+                        Image(systemName: notificationManager.dataMode.iconName)
+                            .foregroundStyle(notificationManager.dataMode == .demo ? .orange : .green)
+                            .frame(width: 28)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(notificationManager.dataMode.displayName)
+                                .font(.body)
+                            Text(notificationManager.dataMode.description)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Button(notificationManager.dataMode == .demo ? "Start Tracking" : "View Demo") {
+                            if notificationManager.dataMode == .demo {
+                                notificationManager.switchToTracking()
+                            } else {
+                                notificationManager.switchToDemo()
+                            }
+                        }
+                        .font(.caption.weight(.medium))
+                        .buttonStyle(.bordered)
+                    }
+                } header: {
+                    Text("Data Mode")
+                } footer: {
+                    Text(notificationManager.dataMode == .demo
+                         ? "Demo mode shows sample data to explore app features."
+                         : "Tracking mode records notifications you manually add.")
+                }
+
                 // Notification Permissions
                 Section {
                     HStack {
@@ -16,6 +52,7 @@ struct SettingsView: View {
                         Spacer()
                         if notificationManager.isAuthorized {
                             Text("Granted")
+                                .font(.caption)
                                 .foregroundStyle(.green)
                         } else {
                             Button("Enable") {
@@ -24,51 +61,66 @@ struct SettingsView: View {
                                 }
                             }
                             .buttonStyle(.bordered)
+                            .controlSize(.small)
                         }
                     }
 
-                    NavigationLink {
-                        ScreenTimePermissionView()
+                    Button {
+                        notificationManager.openAppSettings()
                     } label: {
-                        Label("Screen Time Access", systemImage: "hourglass")
+                        HStack {
+                            Label("Open iOS Settings", systemImage: "gear")
+                            Spacer()
+                            Image(systemName: "arrow.up.right.square")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 } header: {
                     Text("Permissions")
                 } footer: {
-                    Text("These permissions are required to track and analyze notifications.")
+                    Text("To manage app notifications, go to iOS Settings > Notifications.")
                 }
 
                 // Preferences
                 Section("Preferences") {
-                    Toggle(isOn: $enableNotifications) {
+                    Toggle(isOn: $enableDailySummary) {
                         Label("Daily Summary", systemImage: "doc.text")
                     }
 
-                    Toggle(isOn: $showBadge) {
-                        Label("Show Badge Count", systemImage: "app.badge")
-                    }
-
-                    DatePicker(
-                        selection: $dailyReportTime,
-                        displayedComponents: .hourAndMinute
-                    ) {
-                        Label("Report Time", systemImage: "clock")
+                    if enableDailySummary {
+                        DatePicker(
+                            selection: $dailyReportTime,
+                            displayedComponents: .hourAndMinute
+                        ) {
+                            Label("Summary Time", systemImage: "clock")
+                        }
                     }
                 }
 
                 // Data Management
-                Section("Data") {
-                    NavigationLink {
-                        ExportDataView()
-                    } label: {
-                        Label("Export Data", systemImage: "square.and.arrow.up")
+                Section {
+                    if notificationManager.dataMode == .tracking {
+                        NavigationLink {
+                            ExportDataView()
+                        } label: {
+                            Label("Export Data", systemImage: "square.and.arrow.up")
+                        }
+
+                        Button(role: .destructive) {
+                            showClearDataAlert = true
+                        } label: {
+                            Label("Clear All Data", systemImage: "trash")
+                        }
                     }
 
                     Button(role: .destructive) {
-                        // Clear all data
+                        showResetAlert = true
                     } label: {
-                        Label("Clear All Data", systemImage: "trash")
+                        Label("Reset to Demo", systemImage: "arrow.counterclockwise")
                     }
+                } header: {
+                    Text("Data")
                 }
 
                 // About
@@ -86,63 +138,48 @@ struct SettingsView: View {
                         Text("Privacy Policy")
                     }
 
-                    Link(destination: URL(string: "https://github.com")!) {
-                        HStack {
-                            Text("GitHub")
-                            Spacer()
-                            Image(systemName: "arrow.up.right.square")
-                                .foregroundStyle(.secondary)
-                        }
+                    NavigationLink {
+                        LimitationsView()
+                    } label: {
+                        Text("iOS Limitations")
                     }
                 }
             }
             .navigationTitle("Settings")
-        }
-    }
-}
-
-struct ScreenTimePermissionView: View {
-    var body: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "hourglass.circle.fill")
-                .font(.system(size: 60))
-                .foregroundStyle(.blue)
-
-            Text("Screen Time Access")
-                .font(.title2.weight(.bold))
-
-            Text("To analyze notification patterns from all apps, we need access to Screen Time data. This helps us provide accurate statistics and insights.")
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal)
-
-            Button("Open Settings") {
-                if let url = URL(string: UIApplication.openSettingsURLString) {
-                    UIApplication.shared.open(url)
+            .alert("Clear All Data?", isPresented: $showClearDataAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Clear", role: .destructive) {
+                    notificationManager.clearAllData()
                 }
+            } message: {
+                Text("This will delete all your tracked notifications. This action cannot be undone.")
             }
-            .buttonStyle(.borderedProminent)
-
-            Spacer()
+            .alert("Reset to Demo?", isPresented: $showResetAlert) {
+                Button("Cancel", role: .cancel) { }
+                Button("Reset", role: .destructive) {
+                    notificationManager.resetToDemo()
+                }
+            } message: {
+                Text("This will clear your data and switch to demo mode.")
+            }
         }
-        .padding()
-        .navigationTitle("Screen Time")
-        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
 struct ExportDataView: View {
+    @EnvironmentObject var notificationManager: NotificationManager
+
     var body: some View {
         List {
             Section {
                 Button {
-                    // Export as JSON
+                    exportAsJSON()
                 } label: {
                     Label("Export as JSON", systemImage: "doc.text")
                 }
 
                 Button {
-                    // Export as CSV
+                    exportAsCSV()
                 } label: {
                     Label("Export as CSV", systemImage: "tablecells")
                 }
@@ -152,6 +189,14 @@ struct ExportDataView: View {
         }
         .navigationTitle("Export Data")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func exportAsJSON() {
+        // TODO: Implement JSON export
+    }
+
+    private func exportAsCSV() {
+        // TODO: Implement CSV export
     }
 }
 
@@ -178,6 +223,73 @@ struct PrivacyPolicyView: View {
         }
         .navigationTitle("Privacy Policy")
         .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct LimitationsView: View {
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                Text("iOS Limitations")
+                    .font(.title.weight(.bold))
+
+                LimitationCard(
+                    icon: "lock.shield",
+                    title: "Cannot Access Other Apps' Notifications",
+                    description: "iOS security prevents apps from reading notifications sent by other apps. This is why you need to manually log notifications."
+                )
+
+                LimitationCard(
+                    icon: "gear.badge.xmark",
+                    title: "Cannot Directly Disable Notifications",
+                    description: "Apps cannot programmatically disable notifications for other apps. We can only guide you to iOS Settings."
+                )
+
+                LimitationCard(
+                    icon: "arrow.up.right.square",
+                    title: "Settings Deep Link Limited",
+                    description: "We can open your app's settings, but cannot jump directly to a specific app's notification settings."
+                )
+
+                Text("Future Improvements")
+                    .font(.headline)
+                    .padding(.top)
+
+                Text("We're working on integrating Screen Time API (requires Apple approval) which may provide automatic notification statistics in future updates.")
+                    .foregroundStyle(.secondary)
+            }
+            .padding()
+        }
+        .navigationTitle("Limitations")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}
+
+struct LimitationCard: View {
+    let icon: String
+    let title: String
+    let description: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .font(.title2)
+                .foregroundStyle(.orange)
+                .frame(width: 32)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+
+                Text(description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.systemGray6))
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
 

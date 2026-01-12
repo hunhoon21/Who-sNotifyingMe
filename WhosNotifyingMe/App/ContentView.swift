@@ -1,10 +1,13 @@
 import SwiftUI
 
 struct ContentView: View {
+    @EnvironmentObject var notificationManager: NotificationManager
     @State private var selectedTab: Tab = .dashboard
+    @State private var showOnboarding = false
 
     enum Tab {
         case dashboard
+        case apps
         case analytics
         case settings
     }
@@ -17,6 +20,12 @@ struct ContentView: View {
                 }
                 .tag(Tab.dashboard)
 
+            NotificationListView()
+                .tabItem {
+                    Label("Apps", systemImage: "square.grid.2x2")
+                }
+                .tag(Tab.apps)
+
             AnalyticsView()
                 .tabItem {
                     Label("Analytics", systemImage: "chart.bar")
@@ -28,6 +37,14 @@ struct ContentView: View {
                     Label("Settings", systemImage: "gear")
                 }
                 .tag(Tab.settings)
+        }
+        .onAppear {
+            if !notificationManager.hasCompletedOnboarding {
+                showOnboarding = true
+            }
+        }
+        .fullScreenCover(isPresented: $showOnboarding) {
+            OnboardingView()
         }
     }
 }

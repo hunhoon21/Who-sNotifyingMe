@@ -1,24 +1,130 @@
 import Foundation
 import UserNotifications
 import Combine
+import SwiftUI
 
 @MainActor
 class NotificationManager: ObservableObject {
+    // MARK: - Data Mode
+    @AppStorage("dataMode") var dataMode: DataMode = .demo {
+        didSet { refreshData() }
+    }
+
+    @AppStorage("hasCompletedOnboarding") var hasCompletedOnboarding: Bool = false
+
+    // MARK: - Published Properties
     @Published var isAuthorized = false
-    @Published var notifications: [NotificationRecord] = []
-    @Published var appStats: [AppNotificationStats] = []
-    @Published var todayTotal: Int = 0
-    @Published var weeklyTotal: Int = 0
+    @Published private(set) var appStats: [AppNotificationStats] = []
+    @Published private(set) var todayTotal: Int = 0
+    @Published private(set) var weeklyTotal: Int = 0
 
+    // MARK: - Dependencies
     private let notificationCenter = UNUserNotificationCenter.current()
+    private let mockProvider = MockDataProvider.shared
+    private let dataStore = DataStore.shared
+    private var cancellables = Set<AnyCancellable>()
 
+    // MARK: - Initialization
     init() {
+        setupBindings()
         Task {
             await checkAuthorizationStatus()
-            loadMockData()
+            refreshData()
         }
     }
 
+    // MARK: - Data Mode Switching
+    func switchToDemo() {
+        dataMode = .demo
+    }
+
+    func switchToTracking() {
+        dataMode = .tracking
+    }
+
+    // MARK: - Data Refresh
+    func refreshData() {
+        switch dataMode {
+        case .demo:
+            loadDemoData()
+        case .tracking:
+            loadTrackingData()
+        }
+    }
+
+    private func loadDemoData() {
+        appStats = mockProvider.appStats
+        todayTotal = mockProvider.todayTotal
+        weeklyTotal = mockProvider.weeklyTotal
+    }
+
+    private func loadTrackingData() {
+        appStats = dataStore.getAppStats()
+        todayTotal = dataStore.getTodayTotal()
+        weeklyTotal = dataStore.getWeeklyTotal()
+    }
+
+    private func setupBindings() {
+        dataStore.$notifications
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard self?.dataMode == .tracking else { return }
+                self?.loadTrackingData()
+            }
+            .store(in: &cancellables)
+    }
+
+    // MARK: - Chart Data
+    func getHourlyData() -> [HourlyNotificationData] {
+        switch dataMode {
+        case .demo:
+            return mockProvider.getHourlyData()
+        case .tracking:
+            return dataStore.getHourlyData()
+        }
+    }
+
+    func getDailyData() -> [DailyNotificationData] {
+        switch dataMode {
+        case .demo:
+            return mockProvider.getDailyData()
+        case .tracking:
+            return dataStore.getDailyData()
+        }
+    }
+
+    // MARK: - Manual Notification Entry
+    func addNotification(_ record: NotificationRecord) {
+        dataStore.addNotification(record)
+        if dataMode == .tracking {
+            refreshData()
+        }
+    }
+
+    func addNotification(for appInfo: AppInfo, at timestamp: Date = Date()) {
+        let record = NotificationRecord(from: appInfo, timestamp: timestamp)
+        addNotification(record)
+    }
+
+    func deleteNotification(_ record: NotificationRecord) {
+        dataStore.deleteNotification(record)
+        if dataMode == .tracking {
+            refreshData()
+        }
+    }
+
+    // MARK: - Data Management
+    func clearAllData() {
+        dataStore.clearAllNotifications()
+        refreshData()
+    }
+
+    func resetToDemo() {
+        dataStore.clearAllNotifications()
+        dataMode = .demo
+    }
+
+    // MARK: - Authorization
     func requestAuthorization() async {
         do {
             let granted = try await notificationCenter.requestAuthorization(options: [.alert, .badge, .sound])
@@ -33,94 +139,34 @@ class NotificationManager: ObservableObject {
         isAuthorized = settings.authorizationStatus == .authorized
     }
 
-    // Mock data for demonstration
-    private func loadMockData() {
-        appStats = [
-            AppNotificationStats(
-                appName: "Messages",
-                bundleId: "com.apple.MobileSMS",
-                totalCount: 156,
-                todayCount: 23,
-                weeklyCount: 156,
-                category: .messaging,
-                peakHour: 14,
-                averageDaily: 22.3
-            ),
-            AppNotificationStats(
-                appName: "Instagram",
-                bundleId: "com.burbn.instagram",
-                totalCount: 89,
-                todayCount: 12,
-                weeklyCount: 89,
-                category: .social,
-                peakHour: 20,
-                averageDaily: 12.7
-            ),
-            AppNotificationStats(
-                appName: "Gmail",
-                bundleId: "com.google.Gmail",
-                totalCount: 67,
-                todayCount: 8,
-                weeklyCount: 67,
-                category: .productivity,
-                peakHour: 10,
-                averageDaily: 9.6
-            ),
-            AppNotificationStats(
-                appName: "Twitter",
-                bundleId: "com.atebits.Tweetie2",
-                totalCount: 45,
-                todayCount: 5,
-                weeklyCount: 45,
-                category: .social,
-                peakHour: 18,
-                averageDaily: 6.4
-            ),
-            AppNotificationStats(
-                appName: "Slack",
-                bundleId: "com.tinyspeck.chatlyio",
-                totalCount: 34,
-                todayCount: 7,
-                weeklyCount: 34,
-                category: .productivity,
-                peakHour: 11,
-                averageDaily: 4.9
-            )
-        ]
-
-        todayTotal = appStats.reduce(0) { $0 + $1.todayCount }
-        weeklyTotal = appStats.reduce(0) { $0 + $1.weeklyCount }
+    // MARK: - Settings Helper
+    func openAppSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
     }
 
-    func getHourlyData() -> [HourlyNotificationData] {
-        // Mock hourly distribution
-        return [
-            HourlyNotificationData(hour: 8, count: 5),
-            HourlyNotificationData(hour: 9, count: 12),
-            HourlyNotificationData(hour: 10, count: 18),
-            HourlyNotificationData(hour: 11, count: 15),
-            HourlyNotificationData(hour: 12, count: 8),
-            HourlyNotificationData(hour: 13, count: 6),
-            HourlyNotificationData(hour: 14, count: 22),
-            HourlyNotificationData(hour: 15, count: 14),
-            HourlyNotificationData(hour: 16, count: 11),
-            HourlyNotificationData(hour: 17, count: 9),
-            HourlyNotificationData(hour: 18, count: 16),
-            HourlyNotificationData(hour: 19, count: 13),
-            HourlyNotificationData(hour: 20, count: 19),
-            HourlyNotificationData(hour: 21, count: 8),
-            HourlyNotificationData(hour: 22, count: 4)
-        ]
+    // MARK: - Statistics Helpers
+    var hasData: Bool {
+        !appStats.isEmpty
     }
 
-    func getDailyData() -> [DailyNotificationData] {
-        let calendar = Calendar.current
-        return (0..<7).reversed().map { daysAgo in
-            let date = calendar.date(byAdding: .day, value: -daysAgo, to: Date())!
-            return DailyNotificationData(
-                date: date,
-                count: Int.random(in: 40...80)
-            )
+    var topApps: [AppNotificationStats] {
+        Array(appStats.prefix(5))
+    }
+
+    func stats(for bundleId: String) -> AppNotificationStats? {
+        appStats.first { $0.bundleId == bundleId }
+    }
+
+    var categoryBreakdown: [(category: NotificationCategory, count: Int, percentage: Double)] {
+        let grouped = Dictionary(grouping: appStats) { $0.category }
+        let total = Double(appStats.reduce(0) { $0 + $1.totalCount })
+
+        return grouped.map { category, stats in
+            let count = stats.reduce(0) { $0 + $1.totalCount }
+            let percentage = total > 0 ? (Double(count) / total) * 100 : 0
+            return (category: category, count: count, percentage: percentage)
         }
+        .sorted { $0.count > $1.count }
     }
 }
